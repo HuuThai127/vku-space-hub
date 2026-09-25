@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { Booking, Room, User, TimeSlot } from '../types';
-import { authService } from '../services/authService';
+import { authService, RegisterParams } from '../services/authService';
 import { bookingService } from '../services/bookingService';
-import { isSlotBooked, checkRoomSlotConflict } from '../utils/conflictEngine';
+import { isSlotBooked } from '../utils/conflictEngine';
 import { useNotificationStore } from './useNotificationStore';
 
 interface BookingStore {
@@ -15,7 +15,8 @@ interface BookingStore {
   error: string | null;
 
   // Actions
-  login: (email: string) => Promise<void>;
+  login: (email: string, password?: string) => Promise<void>;
+  register: (params: RegisterParams) => Promise<void>;
   loginDemo: () => Promise<void>;
   logout: () => Promise<void>;
   restoreSession: () => Promise<void>;
@@ -35,6 +36,7 @@ interface BookingStore {
     date: string,
     slot: TimeSlot
   ) => boolean;
+  subscribeRealtime: () => () => void;
 }
 
 export const useBookingStore = create<BookingStore>((set, get) => ({
@@ -75,14 +77,26 @@ export const useBookingStore = create<BookingStore>((set, get) => ({
     }
   },
 
-  login: async (email: string) => {
+  login: async (email: string, password?: string) => {
     set({ loading: true, error: null });
     try {
-      const user = await authService.login(email);
+      const user = await authService.login(email, password);
       set({ user, loading: false });
       await get().refreshBookings();
     } catch (err: any) {
       set({ error: err.message || 'Login failed', loading: false });
+      throw err;
+    }
+  },
+
+  register: async (params: RegisterParams) => {
+    set({ loading: true, error: null });
+    try {
+      const user = await authService.register(params);
+      set({ user, loading: false });
+      await get().refreshBookings();
+    } catch (err: any) {
+      set({ error: err.message || 'Registration failed', loading: false });
       throw err;
     }
   },
@@ -247,5 +261,11 @@ export const useBookingStore = create<BookingStore>((set, get) => ({
   checkAvailability: (roomId: string, date: string, slot: TimeSlot): boolean => {
     const all = get().allCampusBookings;
     return !isSlotBooked(roomId, date, slot, all);
+  },
+
+  subscribeRealtime: () => {
+    return bookingService.subscribeToBookings(() => {
+      get().refreshBookings();
+    });
   },
 }));

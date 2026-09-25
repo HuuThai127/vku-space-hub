@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { NotificationItem, NotificationType } from '../types';
+import { notificationService } from '../services/notificationService';
 import { storageService } from '../services/storageService';
+import { useBookingStore } from './useBookingStore';
 
 interface NotificationStore {
   notifications: NotificationItem[];
@@ -26,7 +28,8 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
   fetchNotifications: async () => {
     set({ loading: true });
     try {
-      const list = await storageService.getNotifications();
+      const user = useBookingStore.getState().user;
+      const list = await notificationService.fetchUserNotifications(user?.id);
       const unreadCount = list.filter((n) => !n.read).length;
       set({ notifications: list, unreadCount, loading: false });
     } catch {
@@ -41,12 +44,15 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
     const unreadCount = updated.filter((n) => !n.read).length;
     set({ notifications: updated, unreadCount });
     await storageService.saveNotifications(updated);
+    await notificationService.markAsRead(id);
   },
 
   markAllAsRead: async () => {
+    const user = useBookingStore.getState().user;
     const updated = get().notifications.map((n) => ({ ...n, read: true }));
     set({ notifications: updated, unreadCount: 0 });
     await storageService.saveNotifications(updated);
+    await notificationService.markAllAsRead(user?.id);
   },
 
   addNotification: async (
@@ -56,6 +62,7 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
     bookingId?: string,
     bookingCode?: string
   ) => {
+    const user = useBookingStore.getState().user;
     const newItem: NotificationItem = {
       id: `notif-${Date.now()}`,
       type,
@@ -70,5 +77,16 @@ export const useNotificationStore = create<NotificationStore>((set, get) => ({
     const unreadCount = updated.filter((n) => !n.read).length;
     set({ notifications: updated, unreadCount });
     await storageService.saveNotifications(updated);
+
+    if (user?.id) {
+      await notificationService.createNotificationRecord({
+        userId: user.id,
+        type,
+        title,
+        message,
+        bookingId,
+        bookingCode,
+      });
+    }
   },
 }));

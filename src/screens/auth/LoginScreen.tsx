@@ -20,26 +20,40 @@ export const LoginScreen: React.FC<RootStackScreenProps<'Login'>> = ({
 }) => {
   const [email, setEmail] = useState('student@vku.edu.vn');
   const [password, setPassword] = useState('••••••••');
+  const [fullName, setFullName] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const login = useBookingStore((s) => s.login);
+  const register = useBookingStore((s) => s.register);
   const loginDemo = useBookingStore((s) => s.loginDemo);
 
-  const handleLogin = async () => {
+  const handleSubmit = async () => {
     if (!email.trim()) {
       setError('Please enter your VKU institutional email.');
       return;
     }
+    const effectivePassword =
+      !password || password === '••••••••' ? 'student123' : password;
+
     try {
       setLoading(true);
       setError(null);
-      await login(email);
+      if (isRegistering) {
+        await register({
+          email,
+          password: effectivePassword,
+          fullName: fullName.trim() || undefined,
+        });
+      } else {
+        await login(email, effectivePassword);
+      }
       setLoading(false);
       navigation.replace('MainTabs');
     } catch (err: any) {
       setLoading(false);
-      setError(err.message || 'Login failed. Please check credentials.');
+      setError(err.message || 'Authentication failed. Please check your credentials.');
     }
   };
 
@@ -79,6 +93,17 @@ export const LoginScreen: React.FC<RootStackScreenProps<'Login'>> = ({
 
         {/* Form Card */}
         <View style={styles.card}>
+          {isRegistering && (
+            <AppInput
+              label="Full Name"
+              placeholder="e.g. Nguyen Van Student"
+              value={fullName}
+              onChangeText={setFullName}
+              autoCapitalize="words"
+              leftIcon="person-outline"
+            />
+          )}
+
           <AppInput
             label="Institutional Email"
             placeholder="student@vku.edu.vn"
@@ -103,11 +128,25 @@ export const LoginScreen: React.FC<RootStackScreenProps<'Login'>> = ({
           />
 
           <AppButton
-            title="Sign In"
-            onPress={handleLogin}
+            title={isRegistering ? 'Create Student Account' : 'Sign In'}
+            onPress={handleSubmit}
             loading={loading}
             variant="primary"
             style={styles.signInBtn}
+          />
+
+          <AppButton
+            title={
+              isRegistering
+                ? 'Already have an account? Sign In'
+                : "Don't have an account? Sign Up"
+            }
+            onPress={() => {
+              setIsRegistering(!isRegistering);
+              setError(null);
+            }}
+            variant="ghost"
+            style={styles.switchModeBtn}
           />
 
           <View style={styles.orDivider}>
@@ -188,6 +227,9 @@ const styles = StyleSheet.create({
   },
   signInBtn: {
     marginTop: SPACING.sm,
+  },
+  switchModeBtn: {
+    marginTop: SPACING.xs,
   },
   orDivider: {
     flexDirection: 'row',
